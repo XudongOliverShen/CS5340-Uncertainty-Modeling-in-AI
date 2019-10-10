@@ -125,7 +125,7 @@ if __name__ == "__main__":
 	Gdir_pixels, pixel_indices_ori = downsample_image(args.imgpath)
 	# Convert indices to homogeneous coordinates
 	sh = pixel_indices_ori.shape
-	pixel_indices = np.zeros((sh[0],sh[1]+1))
+	pixel_indices = np.ones((sh[0],sh[1]+1))
 	pixel_indices[:,:-1] = pixel_indices_ori
 	print('Gdir_pixels ', Gdir_pixels.shape, ' ', Gdir_pixels) # TODO: what is it used for?	# (96, 128)
 	print('pixel_indices ', pixel_indices.shape, ' ', pixel_indices) 						# (1999, 3)
@@ -139,7 +139,7 @@ if __name__ == "__main__":
 	max_score = 0
 	score = 0
 	b_c = -np.infty
-	for b in np.arange(-np.pi/4, np.pi/4, np.pi/45):
+	for b in np.arange(-np.pi/3, np.pi/3, np.pi/45):
 		for u in pixel_indices:
 			score += np.log(np.dot(calculate_pixel_evidence(b,0,0,u,P_m_prior), P_m_prior)) 
 			# Note that log P(camera_params) is ignored as we do not assume any priors, so this term is omitted to be added to the score
