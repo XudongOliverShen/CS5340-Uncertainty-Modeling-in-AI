@@ -13,6 +13,7 @@ import argparse
 import numpy as np
 import cv2
 from utils import EM_help_fucntions as emhelp
+import scipy.stats
 
 	
 # Parameters
@@ -97,18 +98,19 @@ def find_vp(K, R, pixels):
 '''
 
 
-def calculate_pixel_evidence(a, b, g, pixel, P_m_prior, vp_dir):
+def calculate_pixel_evidence(a, b, g, pixel, theta_grad, P_m_prior):
 	# return a list of evidence scores over all 4 models for a single pixel
 	# return the angle differences between the predicted normal direction and the gradient direction of a pixel.
 	# x is in shape [3,] which represent the normal direction with respect to the three edge models.
 	
 	R = emhelp.angle2matrix(a,b,g)
-	theta_norm = emhelp.vp2dir(K, R, pixel) # [3,]
-	theta_grad = TODO
+	theta_norm = emhelp.vp2dir(K, R, pixel) # [3,] 
+	# TODO is the output of vp2dir() the norm w.r.t. each vp?
+	# TODO Should we directly make use of vp2dir() or else?
 	err = theta_norm - theta_grad # [3,]
 	err = emhelp.remove_polarity(err)
-	# normal distribution 关于 x, 把err带入x，可算那个probability TODO
-	prob = normal(err, sig, mu)
+	# normal distribution
+	prob = scipy.stats.norm.pdf(err,mu,sig)
 	return prob
 
 	
@@ -127,7 +129,7 @@ if __name__ == "__main__":
 	sh = pixel_indices_ori.shape
 	pixel_indices = np.ones((sh[0],sh[1]+1))
 	pixel_indices[:,:-1] = pixel_indices_ori
-	print('Gdir_pixels ', Gdir_pixels.shape, ' ', Gdir_pixels) # TODO: what is it used for?	# (96, 128)
+	print('Gdir_pixels ', Gdir_pixels.shape, ' ', Gdir_pixels) 								# (96, 128)
 	print('pixel_indices ', pixel_indices.shape, ' ', pixel_indices) 						# (1999, 3)
 	
 	# Initialize K
@@ -141,7 +143,8 @@ if __name__ == "__main__":
 	b_c = -np.infty
 	for b in np.arange(-np.pi/3, np.pi/3, np.pi/45):
 		for u in pixel_indices:
-			score += np.log(np.dot(calculate_pixel_evidence(b,0,0,u,P_m_prior), P_m_prior)) 
+			gdir_u = Gdir_pixels[int(u[0])][int(u[1])]
+			score += np.log(np.dot(calculate_pixel_evidence(b,0,0,u,gdir_u,P_m_prior), P_m_prior)) 
 			# Note that log P(camera_params) is ignored as we do not assume any priors, so this term is omitted to be added to the score
 		if score > max_score:
 			max_score = score
@@ -158,7 +161,8 @@ if __name__ == "__main__":
 		for a in [-np.pi/36, 0, np.pi/36]:
 			for g in [-np.pi/36, 0, np.pi/36]:
 				for u in pixel_indices:
-					score += np.log(np.dot(calculate_pixel_evidence(b,a,g,u,P_m_prior), P_m_prior))
+					gdir_u = Gdir_pixels[int(u[0])][int(u[1])]
+					score += np.log(np.dot(calculate_pixel_evidence(b,a,g,u,gdir_u,P_m_prior), P_m_prior))
 				if score > max_score:
 					max_score = score
 					b_m = b
@@ -174,7 +178,8 @@ if __name__ == "__main__":
 	for a in [a_m-np.pi/36, a_m-np.pi/72, 0, a_m+np.pi/72, a_m+np.pi/36]:
 		for g in [g_m-np.pi/36, g_m-np.pi/72, 0, g_m+np.pi/72, g_m+np.pi/36]:
 			for u in pixel_indices:
-				score += np.log(np.dot(calculate_pixel_evidence(b_m,a,g,u,P_m_prior), P_m_prior))
+				gdir_u = Gdir_pixels[int(u[0])][int(u[1])]
+				score += np.log(np.dot(calculate_pixel_evidence(b_m,a,g,u,gdir_u,P_m_prior), P_m_prior))
 			if score > max_score:
 				max_score = score
 				a_f = a
@@ -183,10 +188,11 @@ if __name__ == "__main__":
 
 	# Compute R given the optimal MAP a_f, b_m, g_f
 	R = emhelp.angle2matrix(a_f, b_m, g_f)
+	print('Initialized R ', R.shape, R)
 
 	# Initialize the VPs
 	v_init = K.dot(R).dot(vp_dir)
-
+	print('v_init ', v_init.shape, v_init)
 
 
 	# Iteratively find the VPs and optimal assignments
