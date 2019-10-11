@@ -61,28 +61,27 @@ def find_vp(K, R, pixels):
 	v_init = K*R*vp_dir # [3,3]
 	convergence = 10e-4
 	while err > convergence:
-		# E-step: Assign each pixel to one of the VPs find argmax of phi_old
+		# E-step: Assign each pixel to one of the VPs find argmax of psi_old
 		max_score = 0
-		phi_old = np.zeros([0.0,0.0,0.0])
+		psi_old = np.zeros([0.0,0.0,0.0])
 		for i in range(4):	# 4 model settings according to P_m_prior
 			for u in pixels: # compute log likelihood over all pixels, to avoid underflow
-				likelihood += log(vp2dir(K, R[i], u)) # theta_edges, i.e, is the arctan# edge orientation
-			score = likelihood*P_m_prior[i]
+				log_likelihood += np.log(vp2dir(K, R[i], u)) # theta_edges, i.e, is the arctan# edge orientation
+			score = log_likelihood+log(P_m_prior[i])
 			if score > max_score:
 				max_score = score
-				phi_old = R[i] # TODO: ???
+				psi_old = R[i] # TODO: ???
 
 		# M-step
 		# cgr representation 
 		S = matrix2vector(R)
 		
-		# TODO: the following is for whole image, what about for a single pixel?
-		abs_sobelx = np.absolute(sobelx)
-		abs_sobely = np.absolute(sobely)
-		graddir = np.arctan2(abs_sobely, abs_sobelx)
-		
-		err = theta_edges − graddir
-		err = remove_polarity(err)
+		# TODO below are not implemented correctly
+		theta_norm = emhelp.vp2dir(K, S, pixel) # [3,] 
+		# TODO is the output of vp2dir() the norm w.r.t. each vp?
+		# TODO Should we directly make use of vp2dir() or else?
+		err = theta_norm - theta_grad # [3,]
+		err = emhelp.remove_polarity(err)
 
 		# Convert the rotation matrix to the Cayley-Gibbs-Rodrigu representation 
 		# to satisfy the orthogonal constraint
