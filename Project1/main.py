@@ -28,7 +28,7 @@ mu = 0.0
 # use [1]: assume that 40% of all edges are outliers/others and that x, y and z edges occur in roughly equal proportions. 
 # P_m_prior = [0.2, 0.2, 0.2, 0.4]
 # use the provided model assignment prior
-P_m_prior = [0.13, 0.24, 0.13, 0.5]
+P_m_prior = np.array([0.13, 0.24, 0.13, 0.5])
 
 
 
@@ -40,10 +40,9 @@ def downsample_image(img_path):
 	# Load a jpeg figure and convert it to grayscale
 	image = cv2.imread(img_path)
 	image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-	#cv2.imwrite('gray.jpg', image_gray)
 	sobelx = cv2.Sobel(image_gray,cv2.CV_64F,1,0,ksize=3)
 	sobely = cv2.Sobel(image_gray,cv2.CV_64F,0,1,ksize=3)
-	# Calculate gradient magnitude TODO: remove scaling and try...
+	# Calculate gradient magnitude
 	gradmag = np.sqrt(sobelx**2+sobely**2)
 	#scale_factor = np.max(gradmag)/255
 	#gradmag = (gradmag/scale_factor).astype(np.uint8)
@@ -56,10 +55,10 @@ def downsample_image(img_path):
 	Gdir, idx = emhelp.down_sample(gradmag, graddir)
 	return Gdir, idx
 
-'''
+
 def find_vp(K, R, pixels): 
-	# Initialized VPs TODO: THIS RESULTS IN ONLY A SINGLE POINT!!! WRONG
-	v_init = K*R*vp_dir
+	# Initialized VPs 
+	v_init = K*R*vp_dir # [3,3]
 	convergence = 10e-4
 	while err > convergence:
 		# E-step: Assign each pixel to one of the VPs find argmax of phi_old
@@ -95,14 +94,13 @@ def find_vp(K, R, pixels):
 	# Covert the Cayley-Gibbs-Rodrigu representation back into a rotation matrix. 
 	# (convert the optimal S to R so as to generate results.)
 	R_opt = vector2matrix(S_opt)
-'''
 
 
+# TODO debug probs add up to more than 1
 def calculate_pixel_evidence(a, b, g, pixel, theta_grad, P_m_prior):
 	# return a list of evidence scores over all 4 models for a single pixel
 	# return the angle differences between the predicted normal direction and the gradient direction of a pixel.
 	# x is in shape [3,] which represent the normal direction with respect to the three edge models.
-	
 	R = emhelp.angle2matrix(a,b,g)
 	theta_norm = emhelp.vp2dir(K, R, pixel) # [3,] 
 	# TODO is the output of vp2dir() the norm w.r.t. each vp?
@@ -111,7 +109,11 @@ def calculate_pixel_evidence(a, b, g, pixel, theta_grad, P_m_prior):
 	err = emhelp.remove_polarity(err)
 	# normal distribution
 	prob = scipy.stats.norm.pdf(err,mu,sig)
-	return prob
+	# Add the outliers/others model case, using 1-prob_vp1-prob_vp2-prob_vp3
+	prob_new=np.zeros((4,))
+	prob_new[:-1]=prob
+	prob_new[-1]=1-np.sum(prob_new)
+	return prob_new
 
 	
 
@@ -142,16 +144,19 @@ if __name__ == "__main__":
 	score = 0
 	b_c = -np.infty
 	for b in np.arange(-np.pi/3, np.pi/3, np.pi/45):
+		print('b ', b)
 		for u in pixel_indices:
 			gdir_u = Gdir_pixels[int(u[0])][int(u[1])]
-			score += np.log(np.dot(calculate_pixel_evidence(b,0,0,u,gdir_u,P_m_prior), P_m_prior)) 
+			evidence = calculate_pixel_evidence(b,0,0,u,gdir_u,P_m_prior)
+			print('evidence ', evidence)
+			score += np.log(np.dot(evidence, P_m_prior)) 
 			# Note that log P(camera_params) is ignored as we do not assume any priors, so this term is omitted to be added to the score
 		if score > max_score:
 			max_score = score
 			b_c = b
 		score = 0
 	
-	# STEP 2: Do a medium-scale search. 
+	#STEP 2: Do a medium-scale search. 
 	b_m = -np.infty
 	a_m = -np.infty
 	g_m = -np.infty
@@ -190,13 +195,13 @@ if __name__ == "__main__":
 	R = emhelp.angle2matrix(a_f, b_m, g_f)
 	print('Initialized R ', R.shape, R)
 
-	# Initialize the VPs
+	# Initialize the VPs (homogenenous? is this why it's 3 by 3?)
 	v_init = K.dot(R).dot(vp_dir)
 	print('v_init ', v_init.shape, v_init)
 
 
-	# Iteratively find the VPs and optimal assignments
-	#find_vp()
+	#Iteratively find the VPs and optimal assignments
+	find_vp()
 
 
 
