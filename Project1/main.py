@@ -98,33 +98,36 @@ def find_vp(K, R, pixels):
 	# Initialized VPs 
 	# v_init = K*R*vp_dir # [3,3]
 	pixel_assignments = []
+	scores = []
 
 	convergence = 10e-4
 	while err > convergence:
 		# E-step: Assign each pixel to one of the VPs by finding argmax of log-posterior
 		for u in pixels: # compute log likelihood over all pixels, to avoid underflow
-			theta_norm = emhelp.vp2dir(K, R, u) # [3,] 
-			# TODO is the output of vp2dir() the norm w.r.t. each vp?
-			# TODO Should we directly make use of vp2dir() or else?
+			#theta_norm = emhelp.vp2dir(K, R, u) # [3,] 
+			theta_norm = []
+			for k in K:
+				vp_trans = k.dot(R).dot(vp_dir) # computes vp location, TODO: should we use each row of K to compute vp?
+				vp_trans = vp_trans/vp_trans[-1]	# represent it in homogeneous coordinates
+				edges = np.cross(vp_trans, u)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
+				theta = np.arctan2(edges[1], edges[0])
+				theta_norm.append(theta)
+			theta_norm = np.array(theta_norm)
 			theta_grad = Gdir_pixels[int(u[0])][int(u[1])]
 			err = emhelp.remove_polarity(theta_norm - theta_grad) # [3,]
 			prob = scipy.stats.norm.pdf(err,mu,sig)
-			# Add the outliers/others model case, using 1-prob_vp1-prob_vp2-prob_vp3
+			# TODO how to Add the outliers/others model case?
 			log_likelihood=np.zeros((4,))
 			log_likelihood[:-1]=prob
 			log_likelihood[-1]=1-np.sum(prob_new)
 			score = log_likelihood + np.log(P_m_prior)
+			scores.append(score) #appends the probability that a pixel u belongs to each of the 4 cases (vp models)
 			pixel_assignments.append(np.argmax(score))
 
 
-		# M-step
-		# cgr representation 
-		S = matrix2vector(R)
-		
+		# M-step TODO https://www.cc.gatech.edu/~dellaert/pub/Schindler04cvpr.pdf Objective defined in 2.5 M-Step
 		# TODO below are not implemented correctly
 		theta_norm = emhelp.vp2dir(K, S, pixel) # [3,] 
-		# TODO is the output of vp2dir() the norm w.r.t. each vp?
-		# TODO Should we directly make use of vp2dir() or else?
 		err = theta_norm - theta_grad # [3,]
 		err = emhelp.remove_polarity(err)
 
