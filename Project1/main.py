@@ -59,18 +59,25 @@ def downsample_image(img_path):
 def find_vp(K, R, pixels): 
 	# Initialized VPs 
 	v_init = K*R*vp_dir # [3,3]
+	pixel_assignments = []
+
 	convergence = 10e-4
 	while err > convergence:
-		# E-step: Assign each pixel to one of the VPs find argmax of psi_old
-		max_score = 0
-		psi_old = np.zeros([0.0,0.0,0.0])
-		for i in range(4):	# 4 model settings according to P_m_prior
-			for u in pixels: # compute log likelihood over all pixels, to avoid underflow
-				log_likelihood += np.log(vp2dir(K, R[i], u)) # theta_edges, i.e, is the arctan# edge orientation
-			score = log_likelihood+log(P_m_prior[i])
-			if score > max_score:
-				max_score = score
-				psi_old = R[i] # TODO: ???
+		# E-step: Assign each pixel to one of the VPs by finding argmax of log-posterior
+		for u in pixels: # compute log likelihood over all pixels, to avoid underflow
+			theta_norm = emhelp.vp2dir(K, R, u) # [3,] 
+			# TODO is the output of vp2dir() the norm w.r.t. each vp?
+			# TODO Should we directly make use of vp2dir() or else?
+			theta_grad = Gdir_pixels[int(u[0])][int(u[1])]
+			err = emhelp.remove_polarity(theta_norm - theta_grad) # [3,]
+			prob = scipy.stats.norm.pdf(err,mu,sig)
+			# Add the outliers/others model case, using 1-prob_vp1-prob_vp2-prob_vp3
+			log_likelihood=np.zeros((4,))
+			log_likelihood[:-1]=prob
+			log_likelihood[-1]=1-np.sum(prob_new)
+			score = log_likelihood + np.log(P_m_prior)
+			pixel_assignments.append(np.argmax(score))
+
 
 		# M-step
 		# cgr representation 
@@ -200,7 +207,7 @@ if __name__ == "__main__":
 
 
 	#Iteratively find the VPs and optimal assignments
-	find_vp()
+	find_vp(K, R)
 
 
 
