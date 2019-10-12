@@ -15,7 +15,7 @@ import cv2
 from utils import EM_help_fucntions as emhelp
 import scipy.stats
 
-'''
+
 # Parameters
 vp_dir = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 0.0]], dtype=np.float32)	# (4,3)
 print('vp_dir shape ', vp_dir.shape)
@@ -30,12 +30,12 @@ mu = 0.0
 # use the provided model assignment prior
 P_m_prior = np.array([0.13, 0.24, 0.13, 0.5])
 
-
+'''
 # Load and downsample image to use only the 1999 (TODO should be 2000) edge pixels (which are of the highest gradient magnitudes)
 Gdir_pixels, pixel_indices_ori = downsample_image('P1030001.jpg')
 # Convert indices to homogeneous coordinates
 sh = pixel_indices_ori.shape
-pixel_indices = np.zeros((sh[0],sh[1]+1))
+pixel_indices = np.ones((sh[0],sh[1]+1))
 pixel_indices[:,:-1] = pixel_indices_ori
 print('Gdir_pixels ', Gdir_pixels.shape, ' ', Gdir_pixels) # TODO: what is it used for?	# (96, 128)
 print('pixel_indices ', pixel_indices.shape, ' ', pixel_indices) 						# (1999, 3)
@@ -51,7 +51,7 @@ b=-np.pi/3
 R = emhelp.angle2matrix(a,b,g)
 thetas = []
 for i in range(4):
-	vp_trans = K.dot(R).dot(vp_dir[:,i]) # computes vp location, TODO: should we use each row of K to compute vp?
+	vp_trans = K.dot(R).dot(vp_dir[i]) # computes vp location, TODO: should we use each row of K to compute vp?
 	vp_trans = vp_trans/vp_trans[-1]	# represent it in homogeneous coordinates
 	edges = np.cross(vp_trans, u)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
 	theta = np.arctan2(edges[1], edges[0])
@@ -105,7 +105,7 @@ def find_vp(K, R, pixels):
 		for u in pixels: # compute log likelihood over all pixels, to avoid underflow
 			theta_norm = []
 			for i in range(4):
-				vp_trans = K.dot(R).dot(vp_dir[:,i]) # computes vp location, TODO: should we use each row of K to compute vp?
+				vp_trans = K.dot(R).dot(vp_dir[i]) # computes vp location, TODO: should we use each row of K to compute vp?
 				vp_trans = vp_trans/vp_trans[-1]	# represent it in homogeneous coordinates
 				edges = np.cross(vp_trans, u)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
 				theta = np.arctan2(edges[1], edges[0])
@@ -145,24 +145,21 @@ def find_vp(K, R, pixels):
 	R_opt = vector2matrix(S_opt)
 
 
-# TODO how to find the probability for the outlier model?
 def calculate_pixel_evidence(a, b, g, pixel, theta_grad):
 	# return a list of evidence scores over all 4 models for a single pixel
-	# return the angle differences between the predicted normal direction and the gradient direction of a pixel.
-	# x is in shape [3,] which represent the normal direction with respect to the three edge models.
 	R = emhelp.angle2matrix(a,b,g)
-	thetas = []
+	theta_norm = []
 	for i in range(4):
-		vp_trans = K.dot(R).dot(vp_dir[:,i]) # computes vp location, TODO: should we use each row of K to compute vp?
-		vp_trans = vp_trans/vp_trans[-1]	# NO NEED?? represent it in homogeneous coordinates
+		vp_trans = K.dot(R).dot(vp_dir[i]) # computes vp location, loop through each vp_dir
+		#vp_trans = vp_trans/vp_trans[-1]	# NO NEED?? represent it in homogeneous coordinates
 		edges = np.cross(vp_trans, pixel)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
 		theta = np.arctan2(edges[1], edges[0])
-		thetas.append(theta)
-	theta_norm = np.array(theta_norm) # TODO Should we directly make use of vp2dir() or else?
-	err = theta_norm - theta_grad # [3,]
+		theta_norm.append(theta)
+	theta_norm = np.array(theta_norm) 
+	err = theta_norm - theta_grad # [4,]
 	err = emhelp.remove_polarity(err)
 	# normal distribution
-	prob = scipy.stats.norm.pdf(err,mu,sig)  	# how to fit a gaussion to error to get a prob??
+	prob = scipy.stats.norm.pdf(err,mu,sig)  	# TODO or can write your own normal
 	return prob
 
 	
@@ -198,8 +195,8 @@ if __name__ == "__main__":
 		for u in pixel_indices:
 			gdir_u = Gdir_pixels[int(u[0])][int(u[1])]
 			evidence = calculate_pixel_evidence(b,0,0,u,gdir_u) # TODO add the outlier case back
-			print('evidence ', evidence)
-			score += np.log(np.dot(evidence, P_m_prior[:-1])) 
+			#print('evidence ', evidence)
+			score += np.log(np.dot(evidence, P_m_prior)) 
 			# Note that log P(camera_params) is ignored as we do not assume any priors, so this term is omitted to be added to the score
 		if score > max_score:
 			max_score = score
@@ -217,7 +214,7 @@ if __name__ == "__main__":
 			for g in [-np.pi/36, 0, np.pi/36]:
 				for u in pixel_indices:
 					gdir_u = Gdir_pixels[int(u[0])][int(u[1])]
-					score += np.log(np.dot(calculate_pixel_evidence(b,a,g,u,gdir_u), P_m_prior[:-1]))
+					score += np.log(np.dot(calculate_pixel_evidence(b,a,g,u,gdir_u), P_m_prior))
 				if score > max_score:
 					max_score = score
 					b_m = b
@@ -234,7 +231,7 @@ if __name__ == "__main__":
 		for g in [g_m-np.pi/36, g_m-np.pi/72, 0, g_m+np.pi/72, g_m+np.pi/36]:
 			for u in pixel_indices:
 				gdir_u = Gdir_pixels[int(u[0])][int(u[1])]
-				score += np.log(np.dot(calculate_pixel_evidence(b_m,a,g,u,gdir_u), P_m_prior[:-1]))
+				score += np.log(np.dot(calculate_pixel_evidence(b_m,a,g,u,gdir_u), P_m_prior))
 			if score > max_score:
 				max_score = score
 				a_f = a
