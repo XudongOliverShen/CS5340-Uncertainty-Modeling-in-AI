@@ -35,7 +35,7 @@ def remove_polarity(x):
     return diff
 
 
-def angle2matrix(a, b, g):
+def angle2matrix(a, b, g): # TODO ADD 0 back
     '''
 
     :param a: the rotation angle around z axis
@@ -44,9 +44,9 @@ def angle2matrix(a, b, g):
     :return: rotation matrix
     '''
 
-    R = np.array([[np.cos(a)*np.cos(b), -np.sin(a)*np.cos(g)+np.cos(a)*np.sin(b)*np.sin(g),  np.sin(a)*np.sin(g)+np.cos(a)*np.sin(b)*np.cos(g), 0],
-                  [np.sin(a)*np.cos(b),  np.cos(a)*np.cos(g)+np.sin(a)*np.sin(b)*np.sin(g), -np.cos(a)*np.sin(g)+np.sin(a)*np.sin(b)*np.cos(g), 0],
-                  [-np.sin(b) ,         -np.cos(b)*np.sin(g),                                np.cos(b)*np.cos(g),                               0]], dtype=np.float32)
+    R = np.array([[np.cos(a)*np.cos(b), -np.sin(a)*np.cos(g)+np.cos(a)*np.sin(b)*np.sin(g),  np.sin(a)*np.sin(g)+np.cos(a)*np.sin(b)*np.cos(g)],
+                  [np.sin(a)*np.cos(b),  np.cos(a)*np.cos(g)+np.sin(a)*np.sin(b)*np.sin(g), -np.cos(a)*np.sin(g)+np.sin(a)*np.sin(b)*np.cos(g)],
+                  [-np.sin(b) ,         -np.cos(b)*np.sin(g),                                np.cos(b)*np.cos(g)]], dtype=np.float32)
 
     return R
 
