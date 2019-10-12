@@ -93,13 +93,14 @@ def downsample_image(img_path):
 	return Gdir, idx
 
 
-def find_vp(K, R, pixels): 
+def find_vp(K, initialized_R, pixels): 
 	# Initialized VPs 
 	# v_init = K*R*vp_dir # [3,3]
 	pixel_assignments = []
 	scores = []
 
 	convergence = 10e-4
+	R = initialized_R
 	while err > convergence:
 		# E-step: Assign each pixel to one of the VPs by finding argmax of log-posterior
 		for u in pixels: # compute log likelihood over all pixels, to avoid underflow
@@ -123,10 +124,9 @@ def find_vp(K, R, pixels):
 		scores=scores/np.sum(scores,axis=1)[:, np.newaxis]
 
 
-		# M-step TODO https://www.cc.gatech.edu/~dellaert/pub/Schindler04cvpr.pdf Objective defined in 2.5 M-Step
-		
-
+		# M-step
 		# TODO error is defined as a sum of weighted error, error is a function of R matrix
+		err = TODO
 
 		# Convert the rotation matrix to the Cayley-Gibbs-Rodrigu representation 
 		# to satisfy the orthogonal constraint
@@ -136,9 +136,10 @@ def find_vp(K, R, pixels):
 		# Use scipy.optimize.least_squares for optimization of Eq 3. 
 		res = scipy.optimize.least_squares(err, R_vector) # todo:TODO error is defined as a sum of weighted error, error is a function of R matrix
 		S_opt = res.x # TODO: replace this dummy
+		# Convert R vector back to R matrix
+		R = vector2matrix(S_opt)
 		err = res.cost
 
-		# Convert R vector back to R matrix
 
 	# Covert the Cayley-Gibbs-Rodrigu representation back into a rotation matrix. 
 	# (convert the optimal S to R so as to generate results.)
@@ -187,11 +188,13 @@ if __name__ == "__main__":
 
 	# Initialize R, by adopting [1] a coarse-to-fine search over combinations of a, b, and g that maximizes towards a MAP objective
 	# STEP 1: find optimal b around the y-axis, fixing a, g to 0
-	max_score = 0
+	print('========== Start step 1 ==============')
+	#search_step =0
+	max_score = -np.infty
 	score = 0
 	b_c = -np.infty
 	for b in np.arange(-np.pi/3, np.pi/3, np.pi/45):
-		#print('b ', b)
+		#print('Search step ', search_step)
 		for u in pixel_indices:
 			gdir_u = Gdir_pixels[int(u[0])][int(u[1])]
 			evidence = calculate_pixel_evidence(b,0,0,u,gdir_u) # TODO add the outlier case back
@@ -199,44 +202,57 @@ if __name__ == "__main__":
 			score += np.log(np.dot(evidence, P_m_prior)) 
 			# Note that log P(camera_params) is ignored as we do not assume any priors, so this term is omitted to be added to the score
 		if score > max_score:
+			#print('in b ', b, 'score ', score)
 			max_score = score
 			b_c = b
 		score = 0
+		#search_step+=1
 	
 	#STEP 2: Do a medium-scale search. 
+	print('========== Start step 2 ==============')
+	#search_step =0
 	b_m = -np.infty
 	a_m = -np.infty
 	g_m = -np.infty
-	max_score = 0
+	max_score = -np.infty
 	score = 0
 	for b in [b_c-np.pi/90, 0, b_c+np.pi/90]:
 		for a in [-np.pi/36, 0, np.pi/36]:
 			for g in [-np.pi/36, 0, np.pi/36]:
 				for u in pixel_indices:
+					#print('Search step ', search_step)
 					gdir_u = Gdir_pixels[int(u[0])][int(u[1])]
 					score += np.log(np.dot(calculate_pixel_evidence(b,a,g,u,gdir_u), P_m_prior))
+					#print('score ', score)
 				if score > max_score:
+					#print('in b ', b, 'score ', score)
 					max_score = score
 					b_m = b
 					a_m = a
 					g_m = g
 				score = 0
+				#search_step+=1
 	
 	# STEP 3: b_m is fixed. Do a fine-scale search
+	print('========== Start step 3 ==============')
+	#search_step =0
 	a_f = -np.infty
 	g_f = -np.infty
-	max_score = 0
+	max_score = -np.infty
 	score = 0
 	for a in [a_m-np.pi/36, a_m-np.pi/72, 0, a_m+np.pi/72, a_m+np.pi/36]:
 		for g in [g_m-np.pi/36, g_m-np.pi/72, 0, g_m+np.pi/72, g_m+np.pi/36]:
 			for u in pixel_indices:
+				#print('Search step ', search_step)
 				gdir_u = Gdir_pixels[int(u[0])][int(u[1])]
 				score += np.log(np.dot(calculate_pixel_evidence(b_m,a,g,u,gdir_u), P_m_prior))
 			if score > max_score:
+				#print('in b ', b, 'score ', score)
 				max_score = score
 				a_f = a
 				g_f = g
 			score = 0
+			#search_step+=1
 
 	# Compute R given the optimal MAP a_f, b_m, g_f
 	R = emhelp.angle2matrix(a_f, b_m, g_f)
