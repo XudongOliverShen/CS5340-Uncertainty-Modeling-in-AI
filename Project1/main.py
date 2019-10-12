@@ -15,7 +15,7 @@ import cv2
 from utils import EM_help_fucntions as emhelp
 import scipy.stats
 
-	
+'''
 # Parameters
 vp_dir = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 0.0]], dtype=np.float32)	# (4,3)
 print('vp_dir shape ', vp_dir.shape)
@@ -58,7 +58,6 @@ for i in range(4):
 	thetas.append(theta)
 
 
-
 # Define model assignment prior
 # use [1]: assume that 40% of all edges are outliers/others and that x, y and z edges occur in roughly equal proportions. 
 # P_m_prior = [0.2, 0.2, 0.2, 0.4]
@@ -70,7 +69,7 @@ pixel_indices = np.ones((sh[0],sh[1]+1)) # todo homogeneous [1, 98] to [1, 98,1]
 pixel_indices[:,:-1] = pixel_indices_ori
 print('Gdir_pixels ', Gdir_pixels.shape, ' ', Gdir_pixels) # TODO: what is it used for?	# (96, 128)
 print('pixel_indices ', pixel_indices.shape, ' ', pixel_indices) 						# (1999, 3)
-
+'''
 
 # TODO: with scaling returns 1970 edge pixels not 2000 pixels...but tuning the size will give even fewer pixels...
 # TODO: without scaling returns 1999 pixels not 2000...
@@ -104,7 +103,6 @@ def find_vp(K, R, pixels):
 	while err > convergence:
 		# E-step: Assign each pixel to one of the VPs by finding argmax of log-posterior
 		for u in pixels: # compute log likelihood over all pixels, to avoid underflow
-			#theta_norm = emhelp.vp2dir(K, R, u) # [3,] 
 			theta_norm = []
 			for i in range(4):
 				vp_trans = K.dot(R).dot(vp_dir[:,i]) # computes vp location, TODO: should we use each row of K to compute vp?
@@ -114,12 +112,8 @@ def find_vp(K, R, pixels):
 				theta_norm.append(theta)
 			theta_norm = np.array(theta_norm)
 			theta_grad = Gdir_pixels[int(u[0])][int(u[1])]
-			err = emhelp.remove_polarity(theta_norm - theta_grad) # [3,]
-			prob = scipy.stats.norm.pdf(err,mu,sig)
-			# TODO how to Add the outliers/others model case?
-			log_likelihood=np.zeros((4,))
-			log_likelihood[:-1]=prob
-			log_likelihood[-1]=1-np.sum(prob_new)
+			err = emhelp.remove_polarity(theta_norm - theta_grad) # [4,]
+			log_likelihood = scipy.stats.norm.pdf(err,mu,sig)
 			score = log_likelihood + np.log(P_m_prior) # [4,]
 			scores.append(score) #appends the probability that a pixel u belongs to each of the 4 cases (vp models)
 			pixel_assignments.append(np.argmax(score))
