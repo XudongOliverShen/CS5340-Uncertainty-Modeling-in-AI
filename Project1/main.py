@@ -30,7 +30,7 @@ mu = 0.0
 # use the provided model assignment prior
 P_m_prior = np.array([0.13, 0.24, 0.13, 0.5])
 
-'''
+
 # Load and downsample image to use only the 1999 (TODO should be 2000) edge pixels (which are of the highest gradient magnitudes)
 Gdir_pixels, pixel_indices_ori = downsample_image('P1030001.jpg')
 # Convert indices to homogeneous coordinates
@@ -44,14 +44,14 @@ print('pixel_indices ', pixel_indices.shape, ' ', pixel_indices) 						# (1999, 
 K = emhelp.cam_intrinsics("/home/ruixi/workspace/Project1/cameraParameters.mat")
 print('Initialized K: ', K.shape, ' ', K )		# (3, 3)
 
-# FOR DEBUG Initialize R, by adopting [1] a coarse-to-fine search over combinations of a, b, and g that maximizes towards a MAP objective
+# FOR DEBUG compute normal Initialize R, by adopting [1] a coarse-to-fine search over combinations of a, b, and g that maximizes towards a MAP objective
 a=0
 g=0
 b=-np.pi/3
 R = emhelp.angle2matrix(a,b,g)
 thetas = []
-for k in K:
-	vp_trans = k.dot(R).dot(vp_dir) # computes vp location, TODO: should we use each row of K to compute vp?
+for i in range(4):
+	vp_trans = K.dot(R).dot(vp_dir[:,i]) # computes vp location, TODO: should we use each row of K to compute vp?
 	vp_trans = vp_trans/vp_trans[-1]	# represent it in homogeneous coordinates
 	edges = np.cross(vp_trans, u)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
 	theta = np.arctan2(edges[1], edges[0])
@@ -66,11 +66,11 @@ for k in K:
 P_m_prior = [0.13, 0.24, 0.13, 0.5]	
 
 
-pixel_indices = np.ones((sh[0],sh[1]+1))
+pixel_indices = np.ones((sh[0],sh[1]+1)) # todo homogeneous [1, 98] to [1, 98,1] is it correct?
 pixel_indices[:,:-1] = pixel_indices_ori
 print('Gdir_pixels ', Gdir_pixels.shape, ' ', Gdir_pixels) # TODO: what is it used for?	# (96, 128)
 print('pixel_indices ', pixel_indices.shape, ' ', pixel_indices) 						# (1999, 3)
-'''
+
 
 # TODO: with scaling returns 1970 edge pixels not 2000 pixels...but tuning the size will give even fewer pixels...
 # TODO: without scaling returns 1999 pixels not 2000...
@@ -106,8 +106,8 @@ def find_vp(K, R, pixels):
 		for u in pixels: # compute log likelihood over all pixels, to avoid underflow
 			#theta_norm = emhelp.vp2dir(K, R, u) # [3,] 
 			theta_norm = []
-			for k in K:
-				vp_trans = k.dot(R).dot(vp_dir) # computes vp location, TODO: should we use each row of K to compute vp?
+			for i in range(4):
+				vp_trans = K.dot(R).dot(vp_dir[:,i]) # computes vp location, TODO: should we use each row of K to compute vp?
 				vp_trans = vp_trans/vp_trans[-1]	# represent it in homogeneous coordinates
 				edges = np.cross(vp_trans, u)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
 				theta = np.arctan2(edges[1], edges[0])
@@ -120,23 +120,31 @@ def find_vp(K, R, pixels):
 			log_likelihood=np.zeros((4,))
 			log_likelihood[:-1]=prob
 			log_likelihood[-1]=1-np.sum(prob_new)
-			score = log_likelihood + np.log(P_m_prior)
+			score = log_likelihood + np.log(P_m_prior) # [4,]
 			scores.append(score) #appends the probability that a pixel u belongs to each of the 4 cases (vp models)
 			pixel_assignments.append(np.argmax(score))
 
+		# normalize scores
+		scores = np.array(scores)
+		scores=scores/np.sum(scores,axis=1)[:, np.newaxis]
+
 
 		# M-step TODO https://www.cc.gatech.edu/~dellaert/pub/Schindler04cvpr.pdf Objective defined in 2.5 M-Step
-		# TODO below are not implemented correctly
-		theta_norm = emhelp.vp2dir(K, S, pixel) # [3,] 
-		err = theta_norm - theta_grad # [3,]
-		err = emhelp.remove_polarity(err)
+		
+
+		# TODO error is defined as a sum of weighted error, error is a function of R matrix
 
 		# Convert the rotation matrix to the Cayley-Gibbs-Rodrigu representation 
 		# to satisfy the orthogonal constraint
 		R_vector = matrix2vector(R)
 
+
 		# Use scipy.optimize.least_squares for optimization of Eq 3. 
-		err = scipy.optimize.least_squares(err, R_vector)
+		res = scipy.optimize.least_squares(err, R_vector) # todo:TODO error is defined as a sum of weighted error, error is a function of R matrix
+		S_opt = res.x # TODO: replace this dummy
+		err = res.cost
+
+		# Convert R vector back to R matrix
 
 	# Covert the Cayley-Gibbs-Rodrigu representation back into a rotation matrix. 
 	# (convert the optimal S to R so as to generate results.)
@@ -149,24 +157,18 @@ def calculate_pixel_evidence(a, b, g, pixel, theta_grad):
 	# return the angle differences between the predicted normal direction and the gradient direction of a pixel.
 	# x is in shape [3,] which represent the normal direction with respect to the three edge models.
 	R = emhelp.angle2matrix(a,b,g)
-	#theta_norm = emhelp.vp2dir(K, R, pixel) # [3,] 
-	theta_norm = []
-	for k in K:
-		vp_trans = k.dot(R).dot(vp_dir) # computes vp location, TODO: should we use each row of K to compute vp?
-		vp_trans = vp_trans/vp_trans[-1]	# represent it in homogeneous coordinates
-		edges = np.cross(vp_trans, u)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
+	thetas = []
+	for i in range(4):
+		vp_trans = K.dot(R).dot(vp_dir[:,i]) # computes vp location, TODO: should we use each row of K to compute vp?
+		vp_trans = vp_trans/vp_trans[-1]	# NO NEED?? represent it in homogeneous coordinates
+		edges = np.cross(vp_trans, pixel)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
 		theta = np.arctan2(edges[1], edges[0])
-		theta_norm.append(theta)
+		thetas.append(theta)
 	theta_norm = np.array(theta_norm) # TODO Should we directly make use of vp2dir() or else?
 	err = theta_norm - theta_grad # [3,]
 	err = emhelp.remove_polarity(err)
 	# normal distribution
-	prob = scipy.stats.norm.pdf(err,mu,sig) 
-	# Add the outliers/others model case
-	# prob_new=np.zeros((4,))
-	# prob_new[:-1]=prob
-	# prob_new[-1]=1-np.sum(prob_new) 
-	# return prob_new
+	prob = scipy.stats.norm.pdf(err,mu,sig)  	# how to fit a gaussion to error to get a prob??
 	return prob
 
 	
