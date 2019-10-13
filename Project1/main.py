@@ -131,40 +131,38 @@ def find_vp(K, initialized_R, pixels, Gdir_pixels):
             prob[:3] = scipy.stats.norm.pdf(err,mu,sig)      # TODO or can write your own normal
             prob[3] = 1/(2*np.pi) # the last prob is given by unifrom distribution
             score = prob*P_m_prior
-            print('pixel score', pixel, ' ', score)
+            #print('pixel score', pixel, ' ', score)
             scores.append(score) #appends the probability that a pixel u belongs to each of the 4 cases (vp models)
             pixel_assignments.append(np.argmax(score, axis=0))
         # normalize scores
         scores = np.array(scores)
         weights=scores/np.sum(scores,axis=1)[:, np.newaxis]
-
-
         # M-step
         # Error is defined as a sum of weighted error, error is a function of R matrix
         error = cost_func(R, K, pixel_indices, Gdir_pixels, weights)
+        
 
         # Convert the rotation matrix to the Cayley-Gibbs-Rodrigu representation 
         # to satisfy the orthogonal constraint
-        S = matrix2vector(R)
+        # TODO: DEBUG S is [3,], but the parameter R to cost_func should be [3,3]
+        S = emhelp.matrix2vector(R)             
+
+
 
         # Use scipy.optimize.least_squares for optimization of Eq 3. 
         res = scipy.optimize.least_squares(cost_func, S, args=(K, pixel_indices, Gdir_pixels, weights)) # todo:TODO error is defined as a sum of weighted error, error is a function of R matrix
         S_opt = res.x
         # Convert R vector back to R matrix
-        R = vector2matrix(S_opt)
+        R = emhelp.vector2matrix(S_opt)
         cur_error = res.cost
         err_diff = np.abs(error - cur_error)
         print('S_opt ', S_opt)
         print('err_diff ', err_diff)
-
         ct+=1
-
-
     # Covert the Cayley-Gibbs-Rodrigu representation back into a rotation matrix. 
     # (convert the optimal S to R so as to generate results.)
     R_opt = vector2matrix(S_opt)
     print('sum_of_weighted_errors ')
-
     return R_opt, pixel_assignments
 
 
