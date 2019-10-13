@@ -102,21 +102,21 @@ def cost_func(R, K, pixels, Gdir_pixels, weights):
 
 
 def find_vp(K, initialized_R, pixels, Gdir_pixels): 
-    # Initialized VPs 
-    # v_init = K*R*vp_dir # [3,3]
-    pixel_assignments = []
-    scores = []
+    '''
+    TODO
+    '''    
     convergence = 10e-4
     R = initialized_R
     err_diff = np.infty
-
     ct = 0
     while err_diff > convergence:
+        pixel_assignments = []
+        scores = []
         print('step ', ct)
         # E-step: Assign each pixel to one of the VPs by finding argmax of log-posterior
         for pixel in pixel_indices: # compute log likelihood over all pixels, to avoid underflow
             theta_norm = []
-            #theta_grad = Gdir_pixels[int(pixel[0])][int(pixel[1])]
+            theta_grad = Gdir_pixels[int(pixel[0])][int(pixel[1])]
             for i in range(3): # only calculate 3 evidence scores, the last one is give by uniform distribution
                 vp_trans = K.dot(R).dot(vp_dir[i]) # computes vp location, loop through each vp_dir
                 #vp_trans = vp_trans/vp_trans[-1]    # NO NEED?? represent it in homogeneous coordinates
@@ -134,12 +134,9 @@ def find_vp(K, initialized_R, pixels, Gdir_pixels):
             print('pixel score', pixel, ' ', score)
             scores.append(score) #appends the probability that a pixel u belongs to each of the 4 cases (vp models)
             pixel_assignments.append(np.argmax(score, axis=0))
-        ct+=1
-
         # normalize scores
         scores = np.array(scores)
         weights=scores/np.sum(scores,axis=1)[:, np.newaxis]
-
 
 
         # M-step
@@ -149,7 +146,6 @@ def find_vp(K, initialized_R, pixels, Gdir_pixels):
         # Convert the rotation matrix to the Cayley-Gibbs-Rodrigu representation 
         # to satisfy the orthogonal constraint
         S = matrix2vector(R)
-
 
         # Use scipy.optimize.least_squares for optimization of Eq 3. 
         res = scipy.optimize.least_squares(cost_func, S, args=(K, pixel_indices, Gdir_pixels, weights)) # todo:TODO error is defined as a sum of weighted error, error is a function of R matrix
@@ -161,11 +157,15 @@ def find_vp(K, initialized_R, pixels, Gdir_pixels):
         print('S_opt ', S_opt)
         print('err_diff ', err_diff)
 
+        ct+=1
+
 
     # Covert the Cayley-Gibbs-Rodrigu representation back into a rotation matrix. 
     # (convert the optimal S to R so as to generate results.)
     R_opt = vector2matrix(S_opt)
     print('sum_of_weighted_errors ')
+
+    return R_opt, pixel_assignments
 
 
 
@@ -279,7 +279,8 @@ if __name__ == "__main__":
 
 
     #Iteratively find the VPs and optimal assignments
-    find_vp(K, R, pixel_indices, Gdir_pixels)
+    print('Start EM...')
+    R_opt, pixel_assignments = find_vp(K, R, pixel_indices, Gdir_pixels)
 
 
 
