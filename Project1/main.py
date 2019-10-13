@@ -106,10 +106,13 @@ def find_vp(K, initialized_R, pixels, Gdir_pixels):
     # v_init = K*R*vp_dir # [3,3]
     pixel_assignments = []
     scores = []
-    sum_of_weighted_errors = np.infty
     convergence = 10e-4
     R = initialized_R
-    while sum_of_weighted_errors > convergence:
+    err_diff = np.infty
+
+    ct = 0
+    while err_diff > convergence:
+        print('step ', ct)
         # E-step: Assign each pixel to one of the VPs by finding argmax of log-posterior
         for pixel in pixel_indices: # compute log likelihood over all pixels, to avoid underflow
             theta_norm = []
@@ -131,6 +134,7 @@ def find_vp(K, initialized_R, pixels, Gdir_pixels):
             print('pixel score', pixel, ' ', score)
             scores.append(score) #appends the probability that a pixel u belongs to each of the 4 cases (vp models)
             pixel_assignments.append(np.argmax(score, axis=0))
+        ct+=1
 
         # normalize scores
         scores = np.array(scores)
@@ -140,24 +144,28 @@ def find_vp(K, initialized_R, pixels, Gdir_pixels):
 
         # M-step
         # Error is defined as a sum of weighted error, error is a function of R matrix
-        sum_of_weighted_errors = cost_func(R, K, pixel_indices, Gdir_pixels, weights)
+        error = cost_func(R, K, pixel_indices, Gdir_pixels, weights)
 
         # Convert the rotation matrix to the Cayley-Gibbs-Rodrigu representation 
         # to satisfy the orthogonal constraint
-        R_vector = matrix2vector(R)
+        S = matrix2vector(R)
 
 
         # Use scipy.optimize.least_squares for optimization of Eq 3. 
-        res = scipy.optimize.least_squares(sum_of_weighted_errors, R_vector) # todo:TODO error is defined as a sum of weighted error, error is a function of R matrix
-        S_opt = res.x # TODO: replace this dummy
+        res = scipy.optimize.least_squares(cost_func, S, args=(K, pixel_indices, Gdir_pixels, weights)) # todo:TODO error is defined as a sum of weighted error, error is a function of R matrix
+        S_opt = res.x
         # Convert R vector back to R matrix
         R = vector2matrix(S_opt)
-        sum_of_weighted_errors = res.cost
+        cur_error = res.cost
+        err_diff = np.abs(error - cur_error)
+        print('S_opt ', S_opt)
+        print('err_diff ', err_diff)
 
 
     # Covert the Cayley-Gibbs-Rodrigu representation back into a rotation matrix. 
     # (convert the optimal S to R so as to generate results.)
     R_opt = vector2matrix(S_opt)
+    print('sum_of_weighted_errors ')
 
 
 
@@ -271,7 +279,7 @@ if __name__ == "__main__":
 
 
     #Iteratively find the VPs and optimal assignments
-    #find_vp(K, R, pixel_indices, Gdir_pixels)
+    find_vp(K, R, pixel_indices, Gdir_pixels)
 
 
 
