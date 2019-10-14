@@ -1,7 +1,7 @@
 """
 Vanishing Point Detection
 Usage: python3 main.py -imgpath P1030001.jpg
-Author: Ruixi Lin
+Author: Ruixi Lin and Xudong Shen
 Date: 09-14-2019
 Version: v0.1
 
@@ -16,7 +16,7 @@ from utils import EM_help_fucntions as emhelp
 import scipy.stats
 from tqdm import tqdm
 
-# TODO check if vp_trans needs to be converted to homogeneous coordinates
+
 
 # Parameters
 vp_dir = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 0.0]], dtype=np.float32)    # (4,3)
@@ -33,7 +33,6 @@ mu = 0.0 # meaning that (theta_norm-theta_grad) is better to be close to 0 for a
 P_m_prior = np.array([0.13, 0.24, 0.13, 0.5])
 
 
-# TODO: with scaling returns 1970 edge pixels not 2000 pixels...but tuning the size will give even fewer pixels...
 # TODO: without scaling returns 1999 pixels not 2000...
 def downsample_image(img_path): 
     # Load a jpeg figure and convert it to grayscale
@@ -271,15 +270,9 @@ if __name__ == "__main__":
     R = emhelp.angle2matrix(a_f, b_f, g_f)
     print('Initialized R ', R.shape, R)
 
-    # Initialize the VPs (homogenenous? is this why it's 3 by 3?)
-    # v_init = K.dot(R).dot(vp_dir)
-    # print('v_init ', v_init.shape, v_init)
-
-
     #Iteratively find the VPs and optimal assignments
     print('Start EM...')
     R_opt, pixel_assignments = find_vp(K, R, pixel_indices, Gdir_pixels)
-
 
 
 
