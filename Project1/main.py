@@ -174,31 +174,37 @@ def E_step(S):
     return weights, pixel_assignments
 
 
-def M_step(S0, w_pm):
+def M_step(S0, K, pixel_indices, Gdir_pixels, w_pm):
     '''
     :param S0 : the camera rotation parameters from the previous step
     :param w_pm : weights from E-step
     :return: R_m : the optimized camera rotation matrix
     '''
-    S_m = least_squares(error_fun, S0, args= (w_pm,))
-
+    S_m = scipy.optimize.least_squares(error_fun, S0, args= (K, pixel_indices, Gdir_pixels, w_pm))
     return S_m
 
-def error_fun(S, w_pm):
-
+def error_fun(S, K, pixels, Gdir_pixels, weights):
     '''
     :param S : the variable we are going to optimize over
     :param w_pm : weights from E-step
     :return: error : the error we are going to minimize
     '''
-
     error = 0.0    # initial error setting to zero
-    R = vector2matrix(S) # Note that the 'S' is just for optimization, it has to be converted to R during computation
-
-    # to be implemented, the error function to be minimized by the M-setp.
-
-
-    return error
+    R = emhelp.vector2matrix(S) # Note that the 'S' is just for optimization, it has to be converted to R during computation
+    sum_of_weighted_errors = 0.0
+    for i in range(len(pixels)):
+        pixel = pixels[i]
+        theta_grad = Gdir_pixels[int(pixel[0])][int(pixel[1])]
+        theta_norm = emhelp.vp2dir(K, R, pixel)
+        err = theta_norm - theta_grad # [4,]
+        err = emhelp.remove_polarity(err)
+        prob = np.zeros(4)
+        # normal distribution
+        prob[:3] = scipy.stats.norm.pdf(err,mu,sig)
+        prob[3] = 1/(2*np.pi) # the last prob is given by unifrom distribution
+        log_likelihood = np.log(prob)
+        sum_of_weighted_errors += weights[i].dot(log_likelihood)
+    return sum_of_weighted_errors
 
 
     
@@ -319,12 +325,12 @@ if __name__ == "__main__":
     print('initialized S ', S)
     w_pm, pixel_assignments = E_step(S)
     print('weights from E step ', w_pm)
-    '''
-    opt = M_step(S, w_pm)
+
+    opt = M_step(S, K, pixel_indices, Gdir_pixels, w_pm)
     S = opt.x
     print('S ', S)
 
-
+    '''
     num_iter = 20
     S = matrix2vector(R)
     for i in range(num_iter):
