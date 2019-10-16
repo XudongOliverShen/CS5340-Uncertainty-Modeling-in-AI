@@ -257,7 +257,7 @@ if __name__ == "__main__":
         opt = M_step(S, K, pixel_indices, Gdir_pixels, w_pm)
         S = opt.x
         print('iter {}: {}'.format(i, time()-t))
-    print('final pixel_assignments ', pixel_assignments.shape, pixel_assignments)
+    print('final pixel_assignments ', len(pixel_assignments), pixel_assignments)
     R_em = emhelp.vector2matrix(S)
     
 
