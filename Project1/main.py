@@ -254,7 +254,7 @@ if __name__ == "__main__":
     for i in range(num_iter):
         t = time()
         w_pm, pixel_assignments = E_step(S)
-        opt = M_step(S, w_pm)
+        opt = M_step(S, K, pixel_indices, Gdir_pixels, w_pm)
         S = opt.x
         print('iter {}: {}'.format(i, time()-t))
     R_em = vector2matrix(S)
