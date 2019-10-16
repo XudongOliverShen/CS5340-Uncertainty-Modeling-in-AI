@@ -16,7 +16,7 @@ from utils import EM_help_fucntions as emhelp
 import scipy.stats
 from tqdm import tqdm
 
-
+# TODO check if vp_trans needs to be converted to homogeneous coordinates
 
 # Parameters
 vp_dir = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 0.0]], dtype=np.float32)    # (4,3)
@@ -33,6 +33,7 @@ mu = 0.0 # meaning that (theta_norm-theta_grad) is better to be close to 0 for a
 P_m_prior = np.array([0.13, 0.24, 0.13, 0.5])
 
 
+# TODO: with scaling returns 1970 edge pixels not 2000 pixels...but tuning the size will give even fewer pixels...
 # TODO: without scaling returns 1999 pixels not 2000...
 def downsample_image(img_path): 
     # Load a jpeg figure and convert it to grayscale
@@ -143,7 +144,7 @@ def find_vp(K, initialized_R, pixels, Gdir_pixels):
 
         # Convert the rotation matrix to the Cayley-Gibbs-Rodrigu representation 
         # to satisfy the orthogonal constraint
-        # TODO: DEBUG S is [3,], but the parameter R to cost_func should be [3,3]
+        # TODO: DEBUG S is [3,], but the parameter R to cost_func should be [3,3], check the cgr representation, where to appply
         S = emhelp.matrix2vector(R)             
 
 
@@ -165,6 +166,67 @@ def find_vp(K, initialized_R, pixels, Gdir_pixels):
     return R_opt, pixel_assignments
 
 
+
+def E_step(S):
+    '''
+    :param S : the Cayley-Gibbs-Rodrigu representation of camera rotation parameters
+    :return: weights, pixel_assignments
+    '''
+    R = vector2matrix(S)  # Note that the 'S' is just for optimization, it has to be converted to R during computation
+    pixel_assignments = []
+    scores = []
+    # E-step: Assign each pixel to one of the VPs by finding argmax of log-posterior
+    for pixel in pixel_indices: # compute log likelihood over all pixels, to avoid underflow
+        theta_norm = []
+        theta_grad = Gdir_pixels[int(pixel[0])][int(pixel[1])]
+        for i in range(3): # only calculate 3 evidence scores, the last one is give by uniform distribution
+            vp_trans = K.dot(R).dot(vp_dir[i]) # computes vp location, loop through each vp_dir
+            #vp_trans = vp_trans/vp_trans[-1]    # NO NEED?? represent it in homogeneous coordinates
+            edges = np.cross(vp_trans, pixel)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
+            theta = np.arctan2(edges[1], edges[0])
+            theta_norm.append(theta)
+        theta_norm = np.array(theta_norm) 
+        err = theta_norm - theta_grad # [4,]
+        err = emhelp.remove_polarity(err)
+        prob = np.zeros(4)
+        # normal distribution
+        prob[:3] = scipy.stats.norm.pdf(err,mu,sig)      # TODO or can write your own normal
+        prob[3] = 1/(2*np.pi) # the last prob is given by unifrom distribution
+        score = prob*P_m_prior
+        #print('pixel score', pixel, ' ', score)
+        scores.append(score) #appends the probability that a pixel u belongs to each of the 4 cases (vp models)
+        pixel_assignments.append(np.argmax(score, axis=0))
+    # normalize scores
+    scores = np.array(scores)
+    weights=scores/np.sum(scores,axis=1)[:, np.newaxis]
+    return weights, pixel_assignments
+
+
+def M_step(S0, w_pm):
+    '''
+    :param S0 : the camera rotation parameters from the previous step
+    :param w_pm : weights from E-step
+    :return: R_m : the optimized camera rotation matrix
+    '''
+    S_m = least_squares(error_fun, S0, args= (w_pm,))
+
+    return S_m
+
+def error_fun(S, w_pm):
+
+    '''
+    :param S : the variable we are going to optimize over
+    :param w_pm : weights from E-step
+    :return: error : the error we are going to minimize
+    '''
+
+    error = 0.0    # initial error setting to zero
+    R = vector2matrix(S) # Note that the 'S' is just for optimization, it has to be converted to R during computation
+
+    # to be implemented, the error function to be minimized by the M-setp.
+
+
+    return error
 
 
     
@@ -270,32 +332,33 @@ if __name__ == "__main__":
     R = emhelp.angle2matrix(a_f, b_f, g_f)
     print('Initialized R ', R.shape, R)
 
+    # Initialize the VPs (homogenenous? is this why it's 3 by 3?)
+    # v_init = K.dot(R).dot(vp_dir)
+    # print('v_init ', v_init.shape, v_init)
+
+
     #Iteratively find the VPs and optimal assignments
     print('Start EM...')
-    R_opt, pixel_assignments = find_vp(K, R, pixel_indices, Gdir_pixels)
+    #R_opt, pixel_assignments = find_vp(K, R, pixel_indices, Gdir_pixels)
 
+    # Debugging...
+    w_pm, pixel_assignments = E_step(S)
+    opt = M_step(S, w_pm)
+    S = opt.x
+    print('S ', S)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    '''
+    num_iter = 20
+    S = matrix2vector(R)
+    for i in range(num_iter):
+        t = time()
+        w_pm, pixel_assignments = E_step(S)
+        opt = M_step(S, w_pm)
+        S = opt.x
+        print('iter {}: {}'.format(i, time()-t))
+    R_em = vector2matrix(S)
+    print('final pixel_assignments ', pixel_assignments.shape, pixel_assignments)
+    '''
 
 
 
