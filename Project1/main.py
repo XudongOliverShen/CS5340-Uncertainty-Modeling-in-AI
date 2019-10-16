@@ -15,6 +15,7 @@ import cv2
 from utils import EM_help_fucntions as emhelp
 import scipy.stats
 from tqdm import tqdm
+from time import time
 
 # TODO check if vp_trans needs to be converted to homogeneous coordinates
 
