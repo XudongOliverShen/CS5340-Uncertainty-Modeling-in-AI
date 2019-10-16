@@ -62,90 +62,6 @@ def calculate_pixel_evidence(a, b, g, pixel, theta_grad):
     return prob
 
 
-def cost_func(R, K, pixels, Gdir_pixels, weights):
-    # R is our variable
-    sum_of_weighted_errors = 0
-    for i in range(len(pixels)):
-        theta_norm = []
-        pixel = pixels[i]
-        theta_grad = Gdir_pixels[int(pixel[0])][int(pixel[1])]
-        for j in range(3): # only calculate 3 evidence scores, the last one is give by uniform distribution
-            vp_trans = K.dot(R).dot(vp_dir[j]) # computes vp location, loop through each vp_dir
-            #vp_trans = vp_trans/vp_trans[-1]    # NO NEED?? represent it in homogeneous coordinates
-            edges = np.cross(vp_trans, pixel) 
-            theta = np.arctan2(edges[1], edges[0])
-            theta_norm.append(theta)
-        theta_norm = np.array(theta_norm) 
-        err = theta_norm - theta_grad # [4,]
-        err = emhelp.remove_polarity(err)
-        prob = np.zeros(4)
-        # normal distribution
-        prob[:3] = scipy.stats.norm.pdf(err,mu,sig)
-        prob[3] = 1/(2*np.pi) # the last prob is given by unifrom distribution
-        log_likelihood = np.log(prob)
-        sum_of_weighted_errors += weights[i].dot(log_likelihood)
-    return sum_of_weighted_errors
-
-
-
-def find_vp(K, initialized_R, pixels, Gdir_pixels): 
-    '''
-    TODO
-    '''    
-    convergence = 10e-4
-    R = initialized_R
-    err_diff = np.infty
-    ct = 0
-    while err_diff > convergence:
-        pixel_assignments = []
-        scores = []
-        print('step ', ct)
-        # E-step: Assign each pixel to one of the VPs by finding argmax of log-posterior
-        for pixel in pixel_indices: # compute log likelihood over all pixels, to avoid underflow
-            theta_norm = emhelp.vp2dir(K, R, pixel)
-            err = theta_norm - theta_grad # [4,]
-            err = emhelp.remove_polarity(err)
-            prob = np.zeros(4)
-            # normal distribution
-            prob[:3] = scipy.stats.norm.pdf(err,mu,sig)      # TODO or can write your own normal
-            prob[3] = 1/(2*np.pi) # the last prob is given by unifrom distribution
-            score = prob*P_m_prior
-            #print('pixel score', pixel, ' ', score)
-            scores.append(score) #appends the probability that a pixel u belongs to each of the 4 cases (vp models)
-            pixel_assignments.append(np.argmax(score, axis=0))
-        # normalize scores
-        scores = np.array(scores)
-        weights=scores/np.sum(scores,axis=1)[:, np.newaxis]
-        # M-step
-        # Error is defined as a sum of weighted error, error is a function of R matrix
-        error = cost_func(R, K, pixel_indices, Gdir_pixels, weights)
-        
-
-        # Convert the rotation matrix to the Cayley-Gibbs-Rodrigu representation 
-        # to satisfy the orthogonal constraint
-        # TODO: DEBUG S is [3,], but the parameter R to cost_func should be [3,3], check the cgr representation, where to appply
-        S = emhelp.matrix2vector(R)             
-
-
-
-        # Use scipy.optimize.least_squares for optimization of Eq 3. 
-        res = scipy.optimize.least_squares(cost_func, S, args=(K, pixel_indices, Gdir_pixels, weights)) # todo:TODO error is defined as a sum of weighted error, error is a function of R matrix
-        S_opt = res.x
-        # Convert R vector back to R matrix
-        R = emhelp.vector2matrix(S_opt)
-        cur_error = res.cost
-        err_diff = np.abs(error - cur_error)
-        print('S_opt ', S_opt)
-        print('err_diff ', err_diff)
-        ct+=1
-    # Covert the Cayley-Gibbs-Rodrigu representation back into a rotation matrix. 
-    # (convert the optimal S to R so as to generate results.)
-    R_opt = vector2matrix(S_opt)
-    print('sum_of_weighted_errors ')
-    return R_opt, pixel_assignments
-
-
-
 def E_step(S):
     '''
     :param S : the Cayley-Gibbs-Rodrigu representation of camera rotation parameters
@@ -321,6 +237,7 @@ if __name__ == "__main__":
 
     
     # Use TA's skeleton code for EM...
+    '''
     S = emhelp.matrix2vector(R)
     print('initialized S ', S)
     w_pm, pixel_assignments = E_step(S)
@@ -332,7 +249,7 @@ if __name__ == "__main__":
 
     '''
     num_iter = 20
-    S = matrix2vector(R)
+    S = emhelp.matrix2vector(R)
     for i in range(num_iter):
         t = time()
         w_pm, pixel_assignments = E_step(S)
@@ -341,7 +258,6 @@ if __name__ == "__main__":
         print('iter {}: {}'.format(i, time()-t))
     R_em = vector2matrix(S)
     print('final pixel_assignments ', pixel_assignments.shape, pixel_assignments)
-    '''
 
 
 
