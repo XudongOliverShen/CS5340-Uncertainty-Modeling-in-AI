@@ -9,7 +9,7 @@ References:
 [1] J. M. Coughlan , A. L. Yuille. Manhattan world: orientation and outlier detection by Bayesian inference. Neural Computation. 2003
 """
 
-import argparse
+#import argparse
 import numpy as np
 import cv2
 from utils import EM_help_fucntions as emhelp
@@ -33,23 +33,17 @@ mu = 0.0 # meaning that (theta_norm-theta_grad) is better to be close to 0 for a
 P_m_prior = np.array([0.13, 0.24, 0.13, 0.5])
 
 
-# TODO: with scaling returns 1970 edge pixels not 2000 pixels...but tuning the size will give even fewer pixels...
 # TODO: without scaling returns 1999 pixels not 2000...
 def downsample_image(img_path): 
     # Load a jpeg figure and convert it to grayscale
     image = cv2.imread(img_path)
     image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    sobelx = cv2.Sobel(image_gray,cv2.CV_64F,1,0,ksize=3)
-    sobely = cv2.Sobel(image_gray,cv2.CV_64F,0,1,ksize=3)
+    sobelx = cv2.Sobel(image_gray,cv2.CV_64F,1,0)#,ksize=3)
+    sobely = cv2.Sobel(image_gray,cv2.CV_64F,0,1)#,ksize=3)
     # Calculate gradient magnitude
     gradmag = np.sqrt(sobelx**2+sobely**2)
-    #scale_factor = np.max(gradmag)/255
-    #gradmag = (gradmag/scale_factor).astype(np.uint8)
     # Calculate gradient direction
     graddir = np.arctan2(sobely, sobelx)
-    abs_sobelx = np.absolute(sobelx)
-    abs_sobely = np.absolute(sobely)
-    graddir = np.arctan2(abs_sobely, abs_sobelx)
     # Downsample the grayscale image
     Gdir, idx = emhelp.down_sample(gradmag, graddir)
     return Gdir, idx
@@ -58,14 +52,7 @@ def downsample_image(img_path):
 def calculate_pixel_evidence(a, b, g, pixel, theta_grad):
     # return a list of evidence scores over all 4 models for a single pixel
     R = emhelp.angle2matrix(a,b,g)
-    theta_norm = []
-    for i in range(3): # only calculate 3 evidence scores, the last one is give by uniform distribution
-        vp_trans = K.dot(R).dot(vp_dir[i]) # computes vp location, loop through each vp_dir
-        #vp_trans = vp_trans/vp_trans[-1]    # NO NEED?? represent it in homogeneous coordinates
-        edges = np.cross(vp_trans, pixel)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
-        theta = np.arctan2(edges[1], edges[0])
-        theta_norm.append(theta)
-    theta_norm = np.array(theta_norm) 
+    theta_norm = emhelp.vp2dir(K, R, pixel) # only calculate 3 evidence scores, the last one is give by uniform distribution
     err = theta_norm - theta_grad # [4,]
     err = emhelp.remove_polarity(err)
     prob = np.zeros(4)
@@ -115,15 +102,7 @@ def find_vp(K, initialized_R, pixels, Gdir_pixels):
         print('step ', ct)
         # E-step: Assign each pixel to one of the VPs by finding argmax of log-posterior
         for pixel in pixel_indices: # compute log likelihood over all pixels, to avoid underflow
-            theta_norm = []
-            theta_grad = Gdir_pixels[int(pixel[0])][int(pixel[1])]
-            for i in range(3): # only calculate 3 evidence scores, the last one is give by uniform distribution
-                vp_trans = K.dot(R).dot(vp_dir[i]) # computes vp location, loop through each vp_dir
-                #vp_trans = vp_trans/vp_trans[-1]    # NO NEED?? represent it in homogeneous coordinates
-                edges = np.cross(vp_trans, pixel)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
-                theta = np.arctan2(edges[1], edges[0])
-                theta_norm.append(theta)
-            theta_norm = np.array(theta_norm) 
+            theta_norm = emhelp.vp2dir(K, R, pixel)
             err = theta_norm - theta_grad # [4,]
             err = emhelp.remove_polarity(err)
             prob = np.zeros(4)
@@ -172,20 +151,13 @@ def E_step(S):
     :param S : the Cayley-Gibbs-Rodrigu representation of camera rotation parameters
     :return: weights, pixel_assignments
     '''
-    R = vector2matrix(S)  # Note that the 'S' is just for optimization, it has to be converted to R during computation
+    R = emhelp.vector2matrix(S)  # Note that the 'S' is just for optimization, it has to be converted to R during computation
     pixel_assignments = []
     scores = []
     # E-step: Assign each pixel to one of the VPs by finding argmax of log-posterior
     for pixel in pixel_indices: # compute log likelihood over all pixels, to avoid underflow
-        theta_norm = []
         theta_grad = Gdir_pixels[int(pixel[0])][int(pixel[1])]
-        for i in range(3): # only calculate 3 evidence scores, the last one is give by uniform distribution
-            vp_trans = K.dot(R).dot(vp_dir[i]) # computes vp location, loop through each vp_dir
-            #vp_trans = vp_trans/vp_trans[-1]    # NO NEED?? represent it in homogeneous coordinates
-            edges = np.cross(vp_trans, pixel)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
-            theta = np.arctan2(edges[1], edges[0])
-            theta_norm.append(theta)
-        theta_norm = np.array(theta_norm) 
+        theta_norm = emhelp.vp2dir(K, R, pixel)
         err = theta_norm - theta_grad # [4,]
         err = emhelp.remove_polarity(err)
         prob = np.zeros(4)
@@ -234,13 +206,16 @@ def error_fun(S, w_pm):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-imgpath", help="Path of the original image.", default='P1030001.jpg')
-    parser.add_argument("-camparam", help="Path of the camera parameters.", default="cameraParameters.mat")
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("-imgpath", help="Path of the original image.", default='P1030001.jpg')
+    # parser.add_argument("-camparam", help="Path of the camera parameters.", default="cameraParameters.mat")
+    # args = parser.parse_args()
     
+    imgpath = 'P1030001.jpg'
+    camparam = 'cameraParameters.mat'
     # Load and downsample image to use only the 1999 (TODO should be 2000) edge pixels (which are of the highest gradient magnitudes)
-    Gdir_pixels, pixel_indices_ori = downsample_image(args.imgpath)
+    #Gdir_pixels, pixel_indices_ori = downsample_image(args.imgpath)
+    Gdir_pixels, pixel_indices_ori = downsample_image(imgpath)
     # Convert indices to homogeneous coordinates
     sh = pixel_indices_ori.shape
     pixel_indices = np.ones((sh[0],sh[1]+1))
@@ -249,7 +224,8 @@ if __name__ == "__main__":
     print('pixel_indices ', pixel_indices.shape, ' ', pixel_indices)                         # (1999, 3)
     
     # Initialize K
-    K = emhelp.cam_intrinsics(args.camparam)
+    #K = emhelp.cam_intrinsics(args.camparam)
+    K = emhelp.cam_intrinsics(camparam)
     print('Initialized K: ', K.shape, ' ', K )        # (3, 3)
 
     # Initialize R, by adopting [1] a coarse-to-fine search over combinations of a, b, and g that maximizes towards a MAP objective
@@ -332,22 +308,23 @@ if __name__ == "__main__":
     R = emhelp.angle2matrix(a_f, b_f, g_f)
     print('Initialized R ', R.shape, R)
 
-    # Initialize the VPs (homogenenous? is this why it's 3 by 3?)
-    # v_init = K.dot(R).dot(vp_dir)
-    # print('v_init ', v_init.shape, v_init)
-
-
     #Iteratively find the VPs and optimal assignments
     print('Start EM...')
     #R_opt, pixel_assignments = find_vp(K, R, pixel_indices, Gdir_pixels)
 
-    # Debugging...
+
+    
+    # Use TA's skeleton code for EM...
+    S = emhelp.matrix2vector(R)
+    print('initialized S ', S)
     w_pm, pixel_assignments = E_step(S)
+    print('weights from E step ', w_pm)
+    '''
     opt = M_step(S, w_pm)
     S = opt.x
     print('S ', S)
 
-    '''
+
     num_iter = 20
     S = matrix2vector(R)
     for i in range(num_iter):
