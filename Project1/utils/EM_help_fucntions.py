@@ -43,11 +43,15 @@ def angle2matrix(a, b, g): # TODO ADD 0 back
     :param g: the rotation angle around x axis
     :return: rotation matrix
     '''
+    R = np.array([[np.cos(a)*np.cos(b), -np.sin(a)*np.cos(g)+np.cos(a)*np.sin(b)*np.sin(g),  np.sin(a)*np.sin(g)+np.cos(a)*np.sin(b)*np.cos(g), 0],
+              [np.sin(a)*np.cos(b),  np.cos(a)*np.cos(g)+np.sin(a)*np.sin(b)*np.sin(g), -np.cos(a)*np.sin(g)+np.sin(a)*np.sin(b)*np.cos(g), 0],
+              [-np.sin(b) ,         -np.cos(b)*np.sin(g),                                np.cos(b)*np.cos(g),                               0]], dtype=np.float32)
 
+    '''
     R = np.array([[np.cos(a)*np.cos(b), -np.sin(a)*np.cos(g)+np.cos(a)*np.sin(b)*np.sin(g),  np.sin(a)*np.sin(g)+np.cos(a)*np.sin(b)*np.cos(g)],
                   [np.sin(a)*np.cos(b),  np.cos(a)*np.cos(g)+np.sin(a)*np.sin(b)*np.sin(g), -np.cos(a)*np.sin(g)+np.sin(a)*np.sin(b)*np.cos(g)],
                   [-np.sin(b) ,         -np.cos(b)*np.sin(g),                                np.cos(b)*np.cos(g)]], dtype=np.float32)
-
+    '''
     return R
 
 def vector2matrix(S):
@@ -100,17 +104,16 @@ def matrix2vector(R):
     S = Q[1:]/Q[0]
     return S
 
-
 def vp2dir(K, R, u):
     '''
     :param K: camera intrinsic matrix
     :param R: camera rotation matrix
-    :param u: pixel location represented in homogeneous coordinate
-    :return: the estimated normal direction for the edge that passes through pixel u
+    :param u: pixel location represented in homogeneous coordinate [x, y, 1]
+    :return: the estimated normal direction for edge that pass through pixel u
     '''
     vp_trans = K.dot(R).dot(vp_dir)
-    edges = np.cross(vp_trans, u)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
-    thetas_es = np.arctan2(edges[1], edges[0])
+    edges = np.cross(vp_trans.transpose(), u)
+    thetas_es = np.arctan2(edges[:, 1], edges[:, 0])
     return thetas_es
 
 def down_sample(Gmag_, Gdir_):
@@ -126,7 +129,17 @@ def down_sample(Gmag_, Gdir_):
     return Gdir, idx
 
 
-
+# def vp2dir(K, R, u):
+#     '''
+#     :param K: camera intrinsic matrix
+#     :param R: camera rotation matrix
+#     :param u: pixel location represented in homogeneous coordinate
+#     :return: the estimated normal direction for the edge that passes through pixel u
+#     '''
+#     vp_trans = K.dot(R).dot(vp_dir)
+#     edges = np.cross(vp_trans, u)  # np.cross computes the vector perpendicular to both vp_trans and u, i.e., edges.dot(vp_trans)=0, edges.dot(u)=0
+#     thetas_es = np.arctan2(edges[1], edges[0])
+#     return thetas_es
 
 
 
