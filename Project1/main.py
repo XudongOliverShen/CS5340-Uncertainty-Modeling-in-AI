@@ -259,6 +259,9 @@ if __name__ == "__main__":
         print('iter {}: {}'.format(i, time()-t))
     print('final pixel_assignments ', len(pixel_assignments), pixel_assignments)
     R_em = emhelp.vector2matrix(S)
+    vp_trans = K.dot(R).dot(vp_dir)
+    print('Final R ', R)
+    print('vp points ', vp_trans)
     
 
 
