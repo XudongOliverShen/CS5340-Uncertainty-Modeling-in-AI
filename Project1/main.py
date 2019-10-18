@@ -74,6 +74,7 @@ def E_step(S):
     # E-step: Assign each pixel to one of the VPs by finding argmax of log-posterior
     for pixel in pixel_indices: # compute log likelihood over all pixels, to avoid underflow
         theta_grad = Gdir_pixels[int(pixel[0])][int(pixel[1])]
+        pixel = np.array([pixel[1]*5, pixel[0]*5, 1])
         theta_norm = emhelp.vp2dir(K, R, pixel)
         err = theta_norm - theta_grad # [4,]
         err = emhelp.remove_polarity(err)
@@ -112,6 +113,7 @@ def error_fun(S, K, pixels, Gdir_pixels, weights):
     for i in range(len(pixels)):
         pixel = pixels[i]
         theta_grad = Gdir_pixels[int(pixel[0])][int(pixel[1])]
+        pixel = np.array([pixel[1]*5, pixel[0]*5, 1])
         theta_norm = emhelp.vp2dir(K, R, pixel)
         err = theta_norm - theta_grad # [4,]
         err = emhelp.remove_polarity(err)
@@ -163,6 +165,8 @@ if __name__ == "__main__":
     for b in tqdm(np.arange(-np.pi/3, np.pi/3, np.pi/45)):
         for u in pixel_indices:
             gdir_u = Gdir_pixels[int(u[0])][int(u[1])]
+            # Represent downsampled pixel arrays in original image coordinates
+            u = np.array([u[1]*5, u[0]*5, 1])
             evidence = calculate_pixel_evidence(b,0,0,u,gdir_u)
             #print('evidence ', evidence)
             score += np.log(np.dot(evidence, P_m_prior)) 
@@ -187,6 +191,7 @@ if __name__ == "__main__":
                 for u in pixel_indices:
                     #print('Search step ', search_step)
                     gdir_u = Gdir_pixels[int(u[0])][int(u[1])]
+                    u = np.array([u[1]*5, u[0]*5, 1])
                     evidence = calculate_pixel_evidence(b,a,g,u,gdir_u)
                     score += np.log(np.dot(evidence, P_m_prior)) 
                     #score += np.log(evidence).sum() + np.log(P_m_prior).sum()
@@ -216,6 +221,7 @@ if __name__ == "__main__":
             for u in pixel_indices:
                 #print('Search step ', search_step)
                 gdir_u = Gdir_pixels[int(u[0])][int(u[1])]
+                u = np.array([u[1]*5, u[0]*5, 1])
                 evidence = calculate_pixel_evidence(b_f,a,g,u,gdir_u)
                 score += np.log(np.dot(evidence, P_m_prior)) 
                 #score += np.log(evidence).sum() + np.log(P_m_prior).sum()
@@ -249,7 +255,7 @@ if __name__ == "__main__":
     print('S ', S)
 
     '''
-    num_iter = 20
+    num_iter = 2#20
     S = emhelp.matrix2vector(R)
     for i in range(num_iter):
         t = time()
@@ -257,11 +263,65 @@ if __name__ == "__main__":
         opt = M_step(S, K, pixel_indices, Gdir_pixels, w_pm)
         S = opt.x
         print('iter {}: {}'.format(i, time()-t))
+    
     print('final pixel_assignments ', len(pixel_assignments), pixel_assignments)
-    R_em = emhelp.vector2matrix(S)
+    R = emhelp.vector2matrix(S)
     vp_trans = K.dot(R).dot(vp_dir)
     print('Final R ', R)
     print('vp points ', vp_trans)
+
+    # save to files
+    res_file = 'outputs'
+    # if os.path.exists(res_file):
+    #     os.remove(res_file)
+
+    np.savez(res_file, pixel_indices_ori, pixel_assignments, vp_trans)
+
+    '''
+    # visualization, done in local machine not on server
+    import matplotlib.pyplot as plt
+    import matplotlib.image as mpimg
+    
+    res_file = 'outputs'
+    npzfile = np.load(res_file+'.npz')
+    pixel_indices_ori = npzfile['arr_0']
+    pixel_assignments = npzfile['arr_1']
+    vp_trans = npzfile['arr_2']
+    # Convert vp to non-homogeneous coordinates [x, y]
+    vp_final = np.array([[p[0]/p[2], p[0]/p[1]] for p in vp_trans])
+    pt_0 = []
+    pt_1 = []
+    pt_2 = []
+    pt_3 = []
+    for i in range(len(pixel_assignments)):
+        pixel_coordinate = [pixel_indices_ori[i][1]*5, pixel_indices_ori[i][0]*5]
+        if pixel_assignments[i] == 0:
+            pt_0.append(pixel_coordinate)
+        elif pixel_assignments[i] == 1:
+            pt_1.append(pixel_coordinate)
+        elif pixel_assignments[i] == 2:
+            pt_2.append(pixel_coordinate)
+        else:
+            pt_3.append(pixel_coordinate)
+
+    # plot original image
+    im = mpimg.imread('P1030001.jpg')
+    implot = plt.imshow(im, zorder=0)
+
+
+    # plot each group of points
+    px, py = map(list, zip(*pt_0))
+    plt.scatter(x=px, y=py, c='r', s=10, zorder=1)
+    px, py = map(list, zip(*pt_1))
+    plt.scatter(x=px, y=py, c='g', s=10, zorder=1)
+    px, py = map(list, zip(*pt_2))
+    plt.scatter(x=px, y=py, c='b', s=10, zorder=1)
+    px, py = map(list, zip(*pt_3))
+    plt.scatter(x=px, y=py, c='y', s=10, zorder=1)
+
+    plt.show()
+    '''
+
     
 
 
