@@ -15,13 +15,14 @@ import cv2
 from utils import EM_help_fucntions as emhelp
 import scipy.stats
 from tqdm import tqdm
-from time import time
+#from time import time
 
 # TODO check if vp_trans needs to be converted to homogeneous coordinates
 
 # Parameters
 vp_dir = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 0.0]], dtype=np.float32)    # (4,3)
 print('vp_dir shape ', vp_dir.shape)
+convergence = 10e-4
 
 # sig and mu are for error probability computation P(phi_p|m_vp1, V) = N(theta_norm_vp1 - theta_grad | sig, mu)
 sig = 0.5
@@ -239,30 +240,22 @@ if __name__ == "__main__":
 
     #Iteratively find the VPs and optimal assignments
     print('Start EM...')
-    #R_opt, pixel_assignments = find_vp(K, R, pixel_indices, Gdir_pixels)
-
-
-    
-    # Use TA's skeleton code for EM...
-    '''
+    num_iter = 20
     S = emhelp.matrix2vector(R)
-    print('initialized S ', S)
-    w_pm, pixel_assignments = E_step(S)
-    print('weights from E step ', w_pm)
-
-    opt = M_step(S, K, pixel_indices, Gdir_pixels, w_pm)
-    S = opt.x
-    print('S ', S)
-
-    '''
-    num_iter = 2#20
-    S = emhelp.matrix2vector(R)
+    error = 1e7
     for i in range(num_iter):
-        t = time()
+        #t = time()
         w_pm, pixel_assignments = E_step(S)
         opt = M_step(S, K, pixel_indices, Gdir_pixels, w_pm)
         S = opt.x
-        print('iter {}: {}'.format(i, time()-t))
+        cur_error = opt.cost
+        error_diff = np.absolute(error - cur_error)
+        print('iter %d error %f and error difference %f: '%(i, cur_error, error_diff))
+        if error_diff < convergence:
+            print('Reached convergence at iter %d, error difference is %f: '%(i, error_diff))
+            break
+        error = cur_error
+        #print('iter {}: {}'.format(i, time()-t))
     
     print('final pixel_assignments ', len(pixel_assignments), pixel_assignments)
     R = emhelp.vector2matrix(S)
@@ -271,7 +264,7 @@ if __name__ == "__main__":
     print('vp points ', vp_trans)
 
     # save to files
-    res_file = 'outputs'
+    res_file = 'outputs1'
     # if os.path.exists(res_file):
     #     os.remove(res_file)
 
@@ -282,7 +275,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import matplotlib.image as mpimg
     
-    res_file = 'outputs'
+    res_file = 'outputs1'
     npzfile = np.load(res_file+'.npz')
     pixel_indices_ori = npzfile['arr_0']
     pixel_assignments = npzfile['arr_1']
