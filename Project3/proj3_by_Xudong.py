@@ -82,65 +82,45 @@ class SeamCarver:
             else:
                 return self.constant
             
-
-        def modified_ln(x):
-            
-            if (x<0).any():
-                raise ValueError('modified_ln function cannot take negative input!')
-                
-            if isinstance(x,(np.ndarray)):
-                ln_x = np.zeros(len(x))
-                for i in range(len(x)):
-                    if x[i] == 0:
-                        ln_x[i] = -self.constant
-                    else:
-                        ln_x[i] = np.log(x[i])
-                return ln_x
-            else:
-                if x == 0:
-                    return -self.constant
-                else:
-                    return np.log(x)
-            
         
         # forward passing
         for row in range(tem_height):
             if row == 0:
-                w_current = modified_ln(energy_map[row,:])
+                w_current = energy_map[row,:]
                 w_old = np.copy(w_current)
             else:
                 for k in range(tem_width):
                     if k == 0:
                         for i in [0, 1]:
                             if i == 0:
-                                Min = np.log(p_transition(k,i)) + w_old[i]
+                                Min = p_transition(k,i) + w_old[i]
                                 Min_index = i
                             else:
-                                B = np.log(p_transition(k,i)) + w_old[i]
+                                B = p_transition(k,i) + w_old[i]
                                 if B < Min:
                                     Min = B
                                     Min_index = i
                     elif k == (tem_width - 1):
                         for i in [tem_width - 2, tem_width - 1]:
                             if i == tem_width - 2:
-                                Min = np.log(p_transition(k,i)) + w_old[i]
+                                Min = p_transition(k,i) + w_old[i]
                                 Min_index = i
                             else:
-                                B = np.log(p_transition(k,i)) + w_old[i]
+                                B = p_transition(k,i) + w_old[i]
                                 if B < Min:
                                     Min = B
                                     Min_index = i
                     else:
                         for i in [k-1, k, k+1]:
                             if i == k-1:
-                                Min = np.log(p_transition(k,i)) + w_old[i]
+                                Min = p_transition(k,i) + w_old[i]
                                 Min_index = i
                             else:
-                                B = np.log(p_transition(k,i)) + w_old[i]
+                                B = p_transition(k,i) + w_old[i]
                                 if B < Min:
                                     Min = B
                                     Min_index = i
-                    w_current[k] = modified_ln(energy_map[row,k]) + Min
+                    w_current[k] = energy_map[row,k] + Min
                     phi[row,k] = Min_index
                     
                 w_old = np. copy(w_current)
